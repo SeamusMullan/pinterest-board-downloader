@@ -1,0 +1,1 @@
+uv run pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py

@@ -6,3 +6,15 @@ __pycache__/
 *.pyd
 *.db
 
+build/
+dist/
+
+*.spec
+*.toc
+*.log
+*.pyz
+*.egg-info
+*.egg
+*.whl
+*.zip
+*.exe
