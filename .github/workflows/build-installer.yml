@@ -13,6 +13,8 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -27,6 +29,83 @@ jobs:
       - name: Build installer with PyInstaller
         run: |
           pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
+      - name: Upload Windows Artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinterest-board-downloader-windows
+          path: dist/pinterest-board-downloader.exe
+
+  build-macos:
+    runs-on: macos-latest
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install .
+      - name: Build macOS binary with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name=pinterest-board-downloader main.py
+      - name: Upload macOS Artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinterest-board-downloader-macos
+          path: dist/pinterest-board-downloader
+
+  build-linux:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install .
+      - name: Build Linux binary with PyInstaller
+        run: |
+          pyinstaller --onefile --name=pinterest-board-downloader main.py
+      - name: Upload Linux Artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinterest-board-downloader-linux
+          path: dist/pinterest-board-downloader
+
+  upload-release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pinterest-board-downloader-windows
+          path: ./artifacts
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pinterest-board-downloader-macos
+          path: ./artifacts
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pinterest-board-downloader-linux
+          path: ./artifacts
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -43,58 +122,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/pinterest-board-downloader.exe
+          asset_path: ./artifacts/pinterest-board-downloader.exe
           asset_name: pinterest-board-downloader.exe
           asset_content_type: application/octet-stream
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install .
-      - name: Build macOS binary with PyInstaller
-        run: |
-          pyinstaller --onefile --windowed --name=pinterest-board-downloader main.py
       - name: Upload macOS Release Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.build-windows.outputs.create_release_upload_url || github.event.release.upload_url }}
-          asset_path: dist/pinterest-board-downloader
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/pinterest-board-downloader
           asset_name: pinterest-board-downloader-macos
           asset_content_type: application/octet-stream
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install .
-      - name: Build Linux binary with PyInstaller
-        run: |
-          pyinstaller --onefile --name=pinterest-board-downloader main.py
       - name: Upload Linux Release Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.build-windows.outputs.create_release_upload_url || github.event.release.upload_url }}
-          asset_path: dist/pinterest-board-downloader
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/pinterest-board-downloader
           asset_name: pinterest-board-downloader-linux
           asset_content_type: application/octet-stream
