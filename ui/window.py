@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QProgressBar, QLabel, QFileDialog, QTreeWidget, QTreeWidgetItem, QSplitter
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QProgressBar, QLabel, QFileDialog, QTreeWidget, QTreeWidgetItem, QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QToolBar
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon, QWheelEvent, QMouseEvent, QAction
 from PySide6.QtCore import Qt, QThread, Signal
 import os
 import download_images
@@ -110,6 +110,71 @@ class DownloadThread(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+class ImageViewer(QGraphicsView):
+    def __init__(self):
+        super().__init__()
+        self.setScene(QGraphicsScene(self))
+        self.pixmap_item = QGraphicsPixmapItem()
+        self.scene().addItem(self.pixmap_item)
+        from PySide6.QtGui import QPainter
+        self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
+        self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
+        self.setDragMode(QGraphicsView.NoDrag)
+        self._zoom = 1.0
+        self._panning = False
+        self._pan_start = None
+
+    def set_image(self, pixmap):
+        self.scene().setSceneRect(0, 0, pixmap.width(), pixmap.height())
+        self.pixmap_item.setPixmap(pixmap)
+        self.reset_zoom()
+
+    def wheelEvent(self, event: QWheelEvent):
+        if event.modifiers() & Qt.ControlModifier:
+            angle = event.angleDelta().y()
+            factor = 1.25 if angle > 0 else 0.8
+            self.zoom(factor)
+        else:
+            super().wheelEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton and event.modifiers() & Qt.ControlModifier:
+            self._panning = True
+            self.setCursor(Qt.ClosedHandCursor)
+            self._pan_start = event.pos()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._panning and self._pan_start:
+            delta = event.pos() - self._pan_start
+            self._pan_start = event.pos()
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton and self._panning:
+            self._panning = False
+            self.setCursor(Qt.ArrowCursor)
+        else:
+            super().mouseReleaseEvent(event)
+
+    def zoom(self, factor):
+        self._zoom *= factor
+        self.scale(factor, factor)
+
+    def zoom_in(self):
+        self.zoom(1.25)
+
+    def zoom_out(self):
+        self.zoom(0.8)
+
+    def reset_zoom(self):
+        self.setTransform(self.transform().fromScale(1, 1).inverted()[0])
+        self._zoom = 1.0
+
 class PinterestDownloaderWindow(QWidget):
     def __init__(self, image_dir="images"):
         super().__init__()
@@ -133,7 +198,11 @@ class PinterestDownloaderWindow(QWidget):
         self.tree.itemClicked.connect(self._on_tree_item_clicked)
         splitter.addWidget(self.tree)
 
-        # Right side layout
+        # Right side layout (main viewer + minimap)
+        right_splitter = QSplitter()
+        right_splitter.setOrientation(Qt.Horizontal)
+
+        # Main viewer area
         right_widget = QWidget()
         layout = QVBoxLayout()
 
@@ -151,30 +220,46 @@ class PinterestDownloaderWindow(QWidget):
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
 
-        # Image viewer and navigation
-        viewer_layout = QVBoxLayout()
-        self.image_label = QLabel("No images downloaded yet.")
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumHeight(300)
-        viewer_layout.addWidget(self.image_label)
+        # Image viewer
+        self.image_viewer = ImageViewer()
+        self.image_viewer.setMinimumHeight(300)
+        layout.addWidget(self.image_viewer)
 
-        nav_layout = QHBoxLayout()
-        self.left_button = QPushButton("<")
-        self.right_button = QPushButton(">")
-        nav_layout.addWidget(self.left_button)
-        nav_layout.addWidget(self.right_button)
-        viewer_layout.addLayout(nav_layout)
+        # Zoom toolbar
+        toolbar = QToolBar()
+        zoom_in_action = QAction("Zoom In", self)
+        zoom_in_action.triggered.connect(self.image_viewer.zoom_in)
+        toolbar.addAction(zoom_in_action)
+        zoom_out_action = QAction("Zoom Out", self)
+        zoom_out_action.triggered.connect(self.image_viewer.zoom_out)
+        toolbar.addAction(zoom_out_action)
+        reset_action = QAction("Reset Zoom", self)
+        reset_action.triggered.connect(self.image_viewer.reset_zoom)
+        toolbar.addAction(reset_action)
+        layout.addWidget(toolbar)
 
-        layout.addLayout(viewer_layout)
         right_widget.setLayout(layout)
-        splitter.addWidget(right_widget)
-        splitter.setSizes([200, 600])
+        right_splitter.addWidget(right_widget)
+
+        # Minimap (thumbnail list)
+        self.minimap = QListWidget()
+        self.minimap.setViewMode(QListWidget.IconMode)
+        self.minimap.setIconSize(QPixmap(80, 80).size())
+        self.minimap.setResizeMode(QListWidget.Adjust)
+        self.minimap.setMovement(QListWidget.Static)
+        self.minimap.setSpacing(4)
+        self.minimap.setMaximumWidth(100)
+        self.minimap.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.minimap.itemClicked.connect(self._on_minimap_item_clicked)
+        right_splitter.addWidget(self.minimap)
+        right_splitter.setSizes([600, 100])
+
+        splitter.addWidget(right_splitter)
+        splitter.setSizes([200, 700])
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
 
         # Connect navigation
-        self.left_button.clicked.connect(self._show_prev_image)
-        self.right_button.clicked.connect(self._show_next_image)
         self.go_button.clicked.connect(self._on_go_clicked)
 
     def _populate_tree(self):
@@ -237,33 +322,44 @@ class PinterestDownloaderWindow(QWidget):
         if not os.path.exists(folder):
             self.image_files = []
             return
-        files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
+        files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))]
         self.image_files = sorted(files)
         self.current_index = 0
+        self._update_minimap()
+
+    def _update_minimap(self):
+        self.minimap.clear()
+        folder = self.current_folder or self.image_dir
+        for idx, fname in enumerate(self.image_files):
+            img_path = os.path.join(folder, fname)
+            pixmap = QPixmap(img_path)
+            if not pixmap.isNull():
+                icon = QIcon(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                item = QListWidgetItem(icon, "")
+                item.setData(Qt.UserRole, idx)
+                self.minimap.addItem(item)
+        if self.image_files:
+            self.minimap.setCurrentRow(self.current_index)
+
+    def _on_minimap_item_clicked(self, item):
+        idx = item.data(Qt.UserRole)
+        if idx is not None:
+            self.current_index = idx
+            self._update_image_viewer()
 
     def _update_image_viewer(self):
         folder = self.current_folder or self.image_dir
         if not self.image_files:
-            self.image_label.setText("No images downloaded yet.")
+            self.image_viewer.set_image(QPixmap())
+            self.minimap.clear()
             return
         img_path = os.path.join(folder, self.image_files[self.current_index])
         pixmap = QPixmap(img_path)
         if pixmap.isNull():
-            self.image_label.setText(f"Cannot load image: {self.image_files[self.current_index]}")
+            self.image_viewer.set_image(QPixmap())
         else:
-            self.image_label.setPixmap(pixmap.scaled(500, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-
-    def _show_prev_image(self):
-        if not self.image_files:
-            return
-        self.current_index = (self.current_index - 1) % len(self.image_files)
-        self._update_image_viewer()
-
-    def _show_next_image(self):
-        if not self.image_files:
-            return
-        self.current_index = (self.current_index + 1) % len(self.image_files)
-        self._update_image_viewer()
+            self.image_viewer.set_image(pixmap)
+        self.minimap.setCurrentRow(self.current_index)
 
     def refresh_images(self):
         self._load_images()
