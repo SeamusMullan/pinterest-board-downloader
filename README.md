@@ -16,23 +16,32 @@ A powerful tool to download all images from Pinterest boards or any other web pa
 
 ## Installation
 
-### Download the Windows Installer (Recommended)
+### Download a Prebuilt Binary (Recommended)
 
 - Go to the [GitHub Releases](https://github.com/yourusername/pinterest-board-downloader/releases) page.
-- Download the latest `pinterest-board-downloader.exe` for Windows.
-- No Python installation required—just run the `.exe` (no console window will appear).
+- Download the latest binary for your platform:
+  - **Windows:** `pinterest-board-downloader.exe`
+  - **macOS:** `pinterest-board-downloader-macos`
+  - **Linux:** `pinterest-board-downloader-linux`
+- No Python installation required—just run the downloaded file for your OS.
+  - On macOS and Linux, you may need to make the file executable:
+    ```bash
+    chmod +x pinterest-board-downloader-macos  # or pinterest-board-downloader-linux
+    ./pinterest-board-downloader-macos         # or ./pinterest-board-downloader-linux
+    ```
+- On Windows, double-click the `.exe` (no console window will appear).
 
-### Build the Windows Executable Locally
+### Build an Executable Locally
 
-If you want to build the Windows executable yourself:
+#### Windows
 
-#### Using the provided script (requires [uv](https://github.com/astral-sh/uv))
+Using the provided script (requires [uv](https://github.com/astral-sh/uv)):
 
 ```bash
 uv run pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
 ```
 
-#### Or manually with PyInstaller
+Or manually with PyInstaller:
 
 ```bash
 pip install pyinstaller
@@ -40,6 +49,22 @@ pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
 ```
 
 The output `.exe` will be in the `dist/` folder.
+
+#### macOS
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --name=pinterest-board-downloader main.py
+```
+The output binary will be in the `dist/` folder as `pinterest-board-downloader`.
+
+#### Linux
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --name=pinterest-board-downloader main.py
+```
+The output binary will be in the `dist/` folder as `pinterest-board-downloader`.
 
 ### Python Script Usage (Alternative)
 
