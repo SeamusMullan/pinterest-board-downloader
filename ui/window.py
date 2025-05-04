@@ -287,6 +287,7 @@ class PinterestDownloaderWindow(QWidget):
         self.minimap.setMaximumWidth(100)
         self.minimap.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.minimap.itemClicked.connect(self._on_minimap_item_clicked)
+        self.minimap.currentRowChanged.connect(self._on_minimap_row_changed)
         right_splitter.addWidget(self.minimap)
         right_splitter.setSizes([600, 100])
 
@@ -389,6 +390,11 @@ class PinterestDownloaderWindow(QWidget):
         idx = item.data(Qt.UserRole)
         if idx is not None:
             self.current_index = idx
+            self._update_image_viewer()
+
+    def _on_minimap_row_changed(self, row):
+        if row != self.current_index and 0 <= row < len(self.image_files):
+            self.current_index = row
             self._update_image_viewer()
 
     def _update_image_viewer(self):
