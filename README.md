@@ -12,15 +12,45 @@ A powerful tool to download all images from Pinterest boards or any other web pa
 - **Headless Operation**: Runs Firefox in headless mode for efficiency
 - **Duplicate Prevention**: Uses MD5 hashing to ensure unique filenames
 - **Progress Feedback**: Provides real-time progress updates during scrolling and downloading
+- **Automated Windows Installer Build**: GitHub Actions automatically builds a Windows `.exe` installer and attaches it to each release (see below).
 
 ## Installation
 
-### Prerequisites
+### Download the Windows Installer (Recommended)
 
-- Python 3.7 or later
+- Go to the [GitHub Releases](https://github.com/yourusername/pinterest-board-downloader/releases) page.
+- Download the latest `pinterest-board-downloader.exe` for Windows.
+- No Python installation required—just run the `.exe` (no console window will appear).
+
+### Build the Windows Executable Locally
+
+If you want to build the Windows executable yourself:
+
+#### Using the provided script (requires [uv](https://github.com/astral-sh/uv))
+
+```bash
+uv run pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
+```
+
+#### Or manually with PyInstaller
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
+```
+
+The output `.exe` will be in the `dist/` folder.
+
+### Python Script Usage (Alternative)
+
+If you prefer to run the script directly:
+
+#### Prerequisites
+
+- Python 3.12 or later (recommended)
 - Firefox browser (required for Selenium WebDriver)
 
-### Using uv (Recommended)
+#### Using uv (Recommended)
 
 [uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver. To install dependencies with uv:
 
@@ -44,7 +74,7 @@ source .venv/bin/activate
 uv pip install selenium webdriver-manager requests
 ```
 
-### Manual Installation (Alternative)
+#### Manual Installation (Alternative)
 
 If you prefer not to use uv:
 
