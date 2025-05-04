@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QProgressBar, QLabel, QFileDialog, QTreeWidget, QTreeWidgetItem, QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QToolBar
 )
 from PySide6.QtGui import QPixmap, QIcon, QWheelEvent, QMouseEvent, QAction
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QSize
 import os
 import download_images
 import re
@@ -109,6 +109,29 @@ class DownloadThread(QThread):
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
+
+class ThumbnailLoader(QThread):
+    thumbnail_ready = Signal(int, QIcon)
+    finished = Signal()
+
+    def __init__(self, image_paths, size=QSize(80, 80)):
+        super().__init__()
+        self.image_paths = image_paths
+        self.size = size
+        self._is_running = True
+
+    def run(self):
+        for idx, img_path in enumerate(self.image_paths):
+            if not self._is_running:
+                break
+            pixmap = QPixmap(img_path)
+            if not pixmap.isNull():
+                icon = QIcon(pixmap.scaled(self.size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                self.thumbnail_ready.emit(idx, icon)
+        self.finished.emit()
+
+    def stop(self):
+        self._is_running = False
 
 class ImageViewer(QGraphicsView):
     def __init__(self):
@@ -325,21 +348,29 @@ class PinterestDownloaderWindow(QWidget):
         files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))]
         self.image_files = sorted(files)
         self.current_index = 0
-        self._update_minimap()
+        self._start_thumbnail_loading()
 
-    def _update_minimap(self):
+    def _start_thumbnail_loading(self):
         self.minimap.clear()
+        if hasattr(self, 'thumbnail_loader') and self.thumbnail_loader is not None:
+            self.thumbnail_loader.stop()
+            self.thumbnail_loader.wait()
         folder = self.current_folder or self.image_dir
-        for idx, fname in enumerate(self.image_files):
-            img_path = os.path.join(folder, fname)
-            pixmap = QPixmap(img_path)
-            if not pixmap.isNull():
-                icon = QIcon(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                item = QListWidgetItem(icon, "")
-                item.setData(Qt.UserRole, idx)
-                self.minimap.addItem(item)
-        if self.image_files:
+        image_paths = [os.path.join(folder, fname) for fname in self.image_files]
+        self.thumbnail_loader = ThumbnailLoader(image_paths)
+        self.thumbnail_loader.thumbnail_ready.connect(self._add_minimap_item)
+        self.thumbnail_loader.finished.connect(self._on_thumbnails_finished)
+        self.thumbnail_loader.start()
+
+    def _add_minimap_item(self, idx, icon):
+        item = QListWidgetItem(icon, "")
+        item.setData(Qt.UserRole, idx)
+        self.minimap.addItem(item)
+        if idx == self.current_index:
             self.minimap.setCurrentRow(self.current_index)
+
+    def _on_thumbnails_finished(self):
+        pass  # Optionally handle when all thumbnails are loaded
 
     def _on_minimap_item_clicked(self, item):
         idx = item.data(Qt.UserRole)
@@ -364,3 +395,9 @@ class PinterestDownloaderWindow(QWidget):
     def refresh_images(self):
         self._load_images()
         self._update_image_viewer()
+
+    def closeEvent(self, event):
+        if hasattr(self, 'thumbnail_loader') and self.thumbnail_loader is not None:
+            self.thumbnail_loader.stop()
+            self.thumbnail_loader.wait()
+        super().closeEvent(event)
