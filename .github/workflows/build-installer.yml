@@ -24,9 +24,9 @@ jobs:
           pip install .
       - name: Build installer with PyInstaller
         run: |
-          pyinstaller --onefile --noconsole main.py
+          pyinstaller --onefile --noconsole --name=pinterest-board-downloader main.py
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pinterest-board-downloader-installer
-          path: dist/main.exe
+          name: pinterest-board-downloader-portable
+          path: dist/pinterest-board-downloader.exe
