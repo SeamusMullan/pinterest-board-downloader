@@ -1,11 +1,30 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QProgressBar, QLabel, QFileDialog, QTreeWidget, QTreeWidgetItem, QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QToolBar
+    QApplication,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QProgressBar,
+    QLabel,
+    QFileDialog,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QSplitter,
+    QListWidget,
+    QListWidgetItem,
+    QSizePolicy,
+    QGraphicsView,
+    QGraphicsScene,
+    QGraphicsPixmapItem,
+    QToolBar,
 )
 from PySide6.QtGui import QPixmap, QIcon, QWheelEvent, QMouseEvent, QAction
 from PySide6.QtCore import Qt, QThread, Signal, QSize
 import os
 import download_images
 import re
+
 
 def extract_profile_and_board(url):
     """Extract profile and board name from a Pinterest board URL."""
@@ -15,6 +34,7 @@ def extract_profile_and_board(url):
         return m.group(2), m.group(3)
     return None, None
 
+
 def extract_profile_and_board_or_fallback(url):
     """Extract profile and board name from a Pinterest board URL, or fallback to a formatted directory name."""
     m = re.match(r"https?://(www\.|[a-z]{2}\.)?pinterest\.com/([^/]+)/([^/]+)/?", url)
@@ -23,24 +43,28 @@ def extract_profile_and_board_or_fallback(url):
     # Fallback: use the first path segment and a sanitized version of the rest
     try:
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
-        path_parts = [p for p in parsed.path.strip('/').split('/') if p]
+        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
         if len(path_parts) >= 2:
             return path_parts[0], path_parts[1]
         elif len(path_parts) == 1:
             # Use the domain as profile, and the path as board
-            domain = parsed.netloc.split('.')[-2]
+            domain = parsed.netloc.split(".")[-2]
             return domain, path_parts[0]
         else:
             # Use the domain as profile, and a hash of the URL as board
             import hashlib
-            domain = parsed.netloc.split('.')[-2]
-            board = hashlib.md5(url.encode('utf-8')).hexdigest()[:12]
+
+            domain = parsed.netloc.split(".")[-2]
+            board = hashlib.md5(url.encode("utf-8")).hexdigest()[:12]
             return domain, board
     except Exception:
         # As a last resort, hash the URL
         import hashlib
-        return 'unknown', hashlib.md5(url.encode('utf-8')).hexdigest()[:12]
+
+        return "unknown", hashlib.md5(url.encode("utf-8")).hexdigest()[:12]
+
 
 class DownloadThread(QThread):
     progress = Signal(int)
@@ -63,39 +87,45 @@ class DownloadThread(QThread):
             image_dict = download_images.scroll_and_collect(driver, self.scroll_pause)
             driver.quit()
             # Count total images for progress
-            total = sum(len(q['high']) + len(q['low']) for q in image_dict.values())
+            total = sum(len(q["high"]) + len(q["low"]) for q in image_dict.values())
             count = 0
+
             def progress_hook():
                 nonlocal count
                 count += 1
                 percent = int((count / total) * 100) if total else 0
                 self.progress.emit(percent)
+
             # Patch download_images.download_images to call progress_hook
             def patched_download_images(image_dict, output_dir, quality_pref):
                 os.makedirs(output_dir, exist_ok=True)
                 for img_id, quality_urls in image_dict.items():
-                    high_quality_urls = quality_urls['high']
-                    low_quality_urls = quality_urls['low']
+                    high_quality_urls = quality_urls["high"]
+                    low_quality_urls = quality_urls["low"]
                     urls_to_download = []
-                    if quality_pref == 'high-only':
+                    if quality_pref == "high-only":
                         if high_quality_urls:
-                            urls_to_download = [(list(high_quality_urls)[0], 'high')]
-                    elif quality_pref == 'prioritize-high':
+                            urls_to_download = [(list(high_quality_urls)[0], "high")]
+                    elif quality_pref == "prioritize-high":
                         if high_quality_urls:
-                            urls_to_download = [(list(high_quality_urls)[0], 'high')]
+                            urls_to_download = [(list(high_quality_urls)[0], "high")]
                         elif low_quality_urls:
-                            urls_to_download = [(list(low_quality_urls)[0], 'low')]
-                    elif quality_pref == 'all':
+                            urls_to_download = [(list(low_quality_urls)[0], "low")]
+                    elif quality_pref == "all":
                         if high_quality_urls:
-                            urls_to_download.append((list(high_quality_urls)[0], 'high'))
+                            urls_to_download.append(
+                                (list(high_quality_urls)[0], "high")
+                            )
                         if low_quality_urls:
-                            urls_to_download.append((list(low_quality_urls)[0], 'low'))
+                            urls_to_download.append((list(low_quality_urls)[0], "low"))
                     for img_url, quality in urls_to_download:
                         try:
                             resp = download_images.requests.get(img_url, timeout=10)
                             resp.raise_for_status()
-                            if quality_pref == 'all':
-                                fname = download_images.sanitize_filename(img_url, quality)
+                            if quality_pref == "all":
+                                fname = download_images.sanitize_filename(
+                                    img_url, quality
+                                )
                             else:
                                 fname = download_images.sanitize_filename(img_url)
                             path = os.path.join(output_dir, fname)
@@ -104,11 +134,13 @@ class DownloadThread(QThread):
                         except Exception:
                             pass
                         progress_hook()
+
             patched_download_images(image_dict, save_dir, self.quality)
             self.progress.emit(100)
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
+
 
 class ThumbnailLoader(QThread):
     thumbnail_ready = Signal(int, QIcon)
@@ -126,12 +158,17 @@ class ThumbnailLoader(QThread):
                 break
             pixmap = QPixmap(img_path)
             if not pixmap.isNull():
-                icon = QIcon(pixmap.scaled(self.size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon = QIcon(
+                    pixmap.scaled(
+                        self.size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    )
+                )
                 self.thumbnail_ready.emit(idx, icon)
         self.finished.emit()
 
     def stop(self):
         self._is_running = False
+
 
 class ImageViewer(QGraphicsView):
     def __init__(self):
@@ -140,6 +177,7 @@ class ImageViewer(QGraphicsView):
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene().addItem(self.pixmap_item)
         from PySide6.QtGui import QPainter
+
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
         self.setDragMode(QGraphicsView.NoDrag)
@@ -189,8 +227,12 @@ class ImageViewer(QGraphicsView):
         if self._panning and self._pan_start:
             delta = event.pos() - self._pan_start
             self._pan_start = event.pos()
-            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
-            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - delta.x()
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - delta.y()
+            )
         else:
             super().mouseMoveEvent(event)
 
@@ -210,6 +252,7 @@ class ImageViewer(QGraphicsView):
 
     def zoom_out(self):
         self.zoom(0.8)
+
 
 class PinterestDownloaderWindow(QWidget):
     def __init__(self, image_dir="images"):
@@ -334,10 +377,7 @@ class PinterestDownloaderWindow(QWidget):
         self.progress_bar.setFormat("")
         self.go_button.setEnabled(False)
         self.download_thread = DownloadThread(
-            url=url,
-            output_dir=self.image_dir,
-            quality="high-only",
-            scroll_pause=2.0
+            url=url, output_dir=self.image_dir, quality="high-only", scroll_pause=2.0
         )
         self.download_thread.progress.connect(self.progress_bar.setValue)
         self.download_thread.finished.connect(self._on_download_finished)
@@ -359,14 +399,18 @@ class PinterestDownloaderWindow(QWidget):
         if not os.path.exists(folder):
             self.image_files = []
             return
-        files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))]
+        files = [
+            f
+            for f in os.listdir(folder)
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+        ]
         self.image_files = sorted(files)
         self.current_index = 0
         self._start_thumbnail_loading()
 
     def _start_thumbnail_loading(self):
         self.minimap.clear()
-        if hasattr(self, 'thumbnail_loader') and self.thumbnail_loader is not None:
+        if hasattr(self, "thumbnail_loader") and self.thumbnail_loader is not None:
             self.thumbnail_loader.stop()
             self.thumbnail_loader.wait()
         folder = self.current_folder or self.image_dir
@@ -416,7 +460,7 @@ class PinterestDownloaderWindow(QWidget):
         self._update_image_viewer()
 
     def closeEvent(self, event):
-        if hasattr(self, 'thumbnail_loader') and self.thumbnail_loader is not None:
+        if hasattr(self, "thumbnail_loader") and self.thumbnail_loader is not None:
             self.thumbnail_loader.stop()
             self.thumbnail_loader.wait()
         super().closeEvent(event)
