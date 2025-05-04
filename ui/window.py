@@ -151,6 +151,23 @@ class ImageViewer(QGraphicsView):
         self.scene().setSceneRect(0, 0, pixmap.width(), pixmap.height())
         self.pixmap_item.setPixmap(pixmap)
         self.reset_zoom()
+        # Fit the image to the view
+        if not pixmap.isNull():
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            self._zoom = 1.0
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Refits the image when the view is resized
+        if not self.pixmap_item.pixmap().isNull():
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            self._zoom = 1.0
+
+    def reset_zoom(self):
+        # Fit the image to the view
+        if not self.pixmap_item.pixmap().isNull():
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            self._zoom = 1.0
 
     def wheelEvent(self, event: QWheelEvent):
         if event.modifiers() & Qt.ControlModifier:
@@ -193,10 +210,6 @@ class ImageViewer(QGraphicsView):
 
     def zoom_out(self):
         self.zoom(0.8)
-
-    def reset_zoom(self):
-        self.setTransform(self.transform().fromScale(1, 1).inverted()[0])
-        self._zoom = 1.0
 
 class PinterestDownloaderWindow(QWidget):
     def __init__(self, image_dir="images"):
